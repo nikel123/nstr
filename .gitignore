@@ -1,0 +1,6 @@
+*.o
+*.so
+*.d
+*.swp
+config.mk
+tests/test
