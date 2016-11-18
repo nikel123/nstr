@@ -9,6 +9,8 @@ libnstr.so: libnstr.o
 libnstr.so: LIBS=
 
 tests/test: tests/test.o
+tests/test: LDFLAGS=-L.
+tests/test: LIBS=-lnstr
 
 CFLAGS += -I. -Werror
 

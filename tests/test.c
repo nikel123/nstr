@@ -10,6 +10,7 @@ main(
     char **argv) {
 
   int ret = 0;
+  const char *str;
 
   nstr_t *s1 = nstr_new_cstr("str1");
   assert(s1);
@@ -87,21 +88,65 @@ main(
   assert(s8->len == 4);
   assert(s8->buf.len == 5);
 
-  printf("1: %s\n", nstr_cstr(s1));
-  printf("2: %s\n", nstr_cstr(s2));
-  printf("3: %s\n", nstr_cstr(s3));
-  printf("4: %s\n", nstr_cstr(s4));
-  printf("5: %s\n", nstr_cstr(s5));
-  printf("6: %s\n", nstr_cstr(s6));
+  nstr_t *s9ref = nstr_new_cstr("Xstr9");
+  assert(s9ref);
 
-  printf("7: %s\n", nstr_cstr(s7));
+  nstr_t *s9 =
+      nstr_new_sub(
+          s9ref,
+          1,
+          4);
+  assert(s9);
+  assert(s9->type == NSTR_SUB_T);
+  assert(s9->len == 4);
+  assert(s9->sub.ref == s9ref);
+  assert(s9->sub.offset == 1);
+  assert(s9ref->refs == 2);
+
+  nstr_unref(s9ref);
+  assert(s9ref->refs == 1);
+
+  nstr_t *s10ref =
+      nstr_new_cstr(
+          "Xstr10X");
+  assert(s10ref);
+
+  nstr_t *s10 =
+      nstr_new_sub(
+          s10ref,
+          1,
+          5);
+
+  nstr_unref(s10ref);
+
+#define ck_str(n) \
+    str = nstr_cstr(s ## n); \
+    assert(str); \
+    assert(strcmp(str, "str" # n) == 0);
+
+  ck_str(1);
+  ck_str(2);
+  ck_str(3);
+  ck_str(4);
+  ck_str(5);
+  ck_str(6);
+  ck_str(7);
   assert(s7->type == NSTR_BUFFER_CSTR_T);
   assert(s7->buf.len == 5);
   assert(strcmp(s7->buf.str, "str7") == 0);
 
-  printf("8: %s\n", nstr_cstr(s8));
+  ck_str(8);
   assert(s8->type == NSTR_BUFFER_CSTR_T);
   assert(strcmp(s8->buf.str, "str8") == 0);
+
+  ck_str(9);
+  assert(s9->type == NSTR_SUB_T);
+
+  ck_str(10);
+  assert(s10->type == NSTR_BUFFER_T);
+  assert(s10->len == 5);
+  assert(s10->buf.str == s10->buf.start);
+  assert(s10->buf.len == s10->len + 1);
 
   nstr_unref(s1);
   nstr_unref(s2);
@@ -111,6 +156,8 @@ main(
   nstr_unref(s6);
   nstr_unref(s7);
   nstr_unref(s8);
+  nstr_unref(s9);
+  nstr_unref(s10);
 
   return ret;
 
