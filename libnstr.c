@@ -198,7 +198,7 @@ nstr_sub_cstr(
     case NSTR_CSTR_T:
     case NSTR_BUFFER_CSTR_T:
       if ( (offset + nstr->len) == sub->len ) {
-        ret = nstr->cstr.str + offset;
+        ret = sub->cstr.str + offset;
         break;
       }
 

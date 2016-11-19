@@ -143,7 +143,7 @@ main(
   assert(s9->type == NSTR_SUB_T);
 
   ck_str(10);
-  assert(s10->type == NSTR_BUFFER_T);
+  assert(s10->type == NSTR_BUFFER_CSTR_T);
   assert(s10->len == 5);
   assert(s10->buf.str == s10->buf.start);
   assert(s10->buf.len == s10->len + 1);

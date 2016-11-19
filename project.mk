@@ -8,6 +8,7 @@ all: libnstr.so
 libnstr.so: libnstr.o
 libnstr.so: LIBS=
 
+tests/test: libnstr.so.$(VER_MAJOR)
 tests/test: tests/test.o
 tests/test: LDFLAGS=-L.
 tests/test: LIBS=-lnstr
