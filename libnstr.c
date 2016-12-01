@@ -23,6 +23,10 @@ nstr_copy_to_buf(
           offset + nstr->sub.offset,
           len);
       break;
+
+    case NSTR_EMPTY_T:
+      break;
+
   }
 
 }
@@ -36,6 +40,7 @@ nstr_sub_compact(
 
   assert(nstr != 0);
   assert(nstr->type == NSTR_SUB_T);
+  assert(nstr->sub.ref->type != NSTR_EMPTY_T);
 
   // check for int overflow
   if ( nstr_unlikely(nstr->len >= SIZE_MAX) )
@@ -90,6 +95,7 @@ nstr_compact(
   nstr_t *ret;
 
   switch(nstr->type) {
+    case NSTR_EMPTY_T:
     case NSTR_CONST_T:
     case NSTR_CSTR_T:
     case NSTR_BUFFER_T:
@@ -106,7 +112,6 @@ nstr_compact(
   return ret;
 
 }
-
 
 static const char *
 nstr_const_cstr(
@@ -152,10 +157,9 @@ nstr_buffer_cstr(
     ret = realloc(nstr->buf.str, nstr->len + 1);
 
     if ( nstr_likely(ret != 0) ) {
-      nstr->type    = NSTR_BUFFER_CSTR_T;
-      nstr->buf.len = nstr->len + 1;
-      nstr->buf.str =
-          nstr->buf.start = ret;
+      nstr->type     = NSTR_BUFFER_CSTR_T;
+      nstr->buf.len  = nstr->len + 1;
+      nstr->buf.str  = nstr->buf.start = ret;
       ret[nstr->len] = 0;
     }
 
@@ -173,8 +177,9 @@ nstr_buffer_cstr(
       nstr->buf.str = ret;
     }
 
-    if ( ret[nstr->len] != 0 )
+    if ( ret[nstr->len] != 0 ) {
       ret[nstr->len] = 0;
+    }
 
   }
 
@@ -190,6 +195,7 @@ nstr_sub_cstr(
 
   assert(nstr != 0);
   assert(nstr->type == NSTR_SUB_T);
+  assert(nstr->sub.ref->type != NSTR_EMPTY_T);
 
   nstr_t *sub = nstr->sub.ref;
   const size_t offset = nstr->sub.offset;
@@ -243,6 +249,10 @@ nstr_cstr(
 
     case NSTR_SUB_T:
       ret = nstr_sub_cstr(nstr);
+      break;
+
+    case NSTR_EMPTY_T:
+      ret = "";
       break;
 
   }

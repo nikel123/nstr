@@ -13,11 +13,13 @@
 #define nstr_unlikely(x) __builtin_expect((x),0)
 
 enum nstr_type_t {
+  NSTR_EMPTY_T,
   NSTR_CONST_T,
   NSTR_CSTR_T,
   NSTR_BUFFER_T,
   NSTR_BUFFER_CSTR_T,
-  NSTR_SUB_T
+  NSTR_SUB_T,
+  //NSTR_LST_T
 };
 typedef enum nstr_type_t nstr_type_t;
 
@@ -44,6 +46,10 @@ struct nstr_t {
       size_t offset;
       nstr_t *ref;
     } sub;
+
+    struct {
+      void **list;
+    } lst;
 
   };
 };
@@ -76,6 +82,7 @@ nstr_unref(
       case NSTR_BUFFER_CSTR_T:
         free(nstr->buf.start);
 
+      case NSTR_EMPTY_T:
       case NSTR_CONST_T:
       case NSTR_CSTR_T:
 	  nstr_free:
@@ -93,6 +100,25 @@ nstr_cstr(
     nstr_t *nstr);
 
 static nstr_t *
+nstr_new()
+    __attribute__((unused));
+
+static nstr_t *
+nstr_new() {
+
+  nstr_t *ret = malloc(sizeof(*ret));
+
+  if ( nstr_likely(ret != 0) ) {
+    ret->type = NSTR_EMPTY_T;
+    ret->len  = 0;
+    ret->refs = 1;
+  }
+
+  return ret;
+
+}
+
+static nstr_t *
 nstr_new_cstr_n(
     const char *str,
     size_t     len) {
@@ -104,7 +130,7 @@ nstr_new_cstr_n(
 
   if ( nstr_likely(ret != 0) ) {
     ret->type     = NSTR_CSTR_T;
-    ret->len   = len;
+    ret->len      = len;
     ret->refs     = 1;
     ret->cstr.str = str;
   }
@@ -217,7 +243,6 @@ nstr_new_sub(
   nstr_t *ret;
 
   assert(ref != 0);
-  assert(len != 0);
 
   // check for int overflow
   if ( nstr_unlikely(
@@ -229,17 +254,33 @@ nstr_new_sub(
 
   }
 
-
   ret = malloc(sizeof(*ret));
 
   if ( nstr_likely(ret != 0) ) {
-    ret->type = NSTR_SUB_T;
-    ret->len  = len;
+
+    if ( ref->type == NSTR_EMPTY_T ) {
+
+      assert(offset == 0);
+      assert(len    == 0);
+
+      ret->type = NSTR_EMPTY_T;
+      ret->len  = 0;
+
+    } else {
+
+      assert(len != 0);
+
+      ret->type = NSTR_SUB_T;
+      ret->len  = len;
+
+      nstr_ref(ref);
+      ret->sub.ref    = ref;
+      ret->sub.offset = offset;
+
+    }
+
     ret->refs = 1;
 
-    nstr_ref(ref);
-    ret->sub.ref    = ref;
-    ret->sub.offset = offset;
   }
 
 end:
