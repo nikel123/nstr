@@ -119,6 +119,18 @@ main(
 
   nstr_unref(s10ref);
 
+  nstr_t *s11 = nstr_new();
+
+  assert(s11);
+  assert(s11->type == NSTR_EMPTY_T);
+  assert(s11->len == 0);
+
+  nstr_t *s12 = nstr_new_sub(s11, 0, 0);
+
+  assert(s12);
+  assert(s12->type == NSTR_EMPTY_T);
+  assert(s12->len == 0);
+
 #define ck_str(n) \
     str = nstr_cstr(s ## n); \
     assert(str); \
@@ -148,6 +160,10 @@ main(
   assert(s10->buf.str == s10->buf.start);
   assert(s10->buf.len == s10->len + 1);
 
+  str = nstr_cstr(s11);
+  assert(str);
+  assert(strcmp(str, "") == 0);
+
   nstr_unref(s1);
   nstr_unref(s2);
   nstr_unref(s3);
@@ -158,6 +174,8 @@ main(
   nstr_unref(s8);
   nstr_unref(s9);
   nstr_unref(s10);
+  nstr_unref(s11);
+  nstr_unref(s12);
 
   return ret;
 
