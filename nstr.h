@@ -19,7 +19,7 @@ enum nstr_type_t {
   NSTR_BUFFER_T,
   NSTR_BUFFER_CSTR_T,
   NSTR_SUB_T,
-  //NSTR_LST_T
+  NSTR_LIST_T
 };
 typedef enum nstr_type_t nstr_type_t;
 
@@ -43,13 +43,11 @@ struct nstr_t {
     } cstr;
 
     struct {
-      size_t offset;
       nstr_t *ref;
+      size_t offset;
     } sub;
 
-    struct {
-      void **list;
-    } lst;
+    void **lst;
 
   };
 };
@@ -58,21 +56,33 @@ static void
 nstr_ref(
     nstr_t *nstr) {
 
-  assert(nstr->refs > 0);
-  assert(nstr->refs < SIZE_MAX);
-  ++(nstr->refs);
+  if ( nstr_likely(nstr->refs < SIZE_MAX) )
+    ++(nstr->refs);
 
 }
+
+// only for use in nstr_unref
+void
+nstr_list_free(
+    nstr_t *nstr);
 
 static void
 nstr_unref(
     nstr_t *nstr) {
 
   assert(nstr->refs);
-  --(nstr->refs);
+
+  // we can't count past SIZE_MAX, so
+  // we won't free it if is could be more than that
+  if ( nstr_likely(nstr->refs < SIZE_MAX) )
+    --(nstr->refs);
 
   if ( nstr->refs == 0 )  {
     switch(nstr->type) {
+
+      case NSTR_LIST_T:
+        nstr_list_free(nstr);
+        break;
 
 	  case NSTR_SUB_T:
 	    nstr_unref(nstr->sub.ref);
@@ -87,11 +97,12 @@ nstr_unref(
       case NSTR_CSTR_T:
 	  nstr_free:
         free(nstr);
+
     }
   }
 }
 
-nstr_t *
+int
 nstr_compact(
     nstr_t *nstr);
 
@@ -294,5 +305,15 @@ nstr_copy_to_buf(
     nstr_t *nstr,
     size_t offset,
     size_t len);
+
+/*
+  concatenate strings and return resulting string.
+  argument list must be terminated by NULL (0).
+  source strings will be unreferenced
+*/
+nstr_t *
+nstr_concat(
+    nstr_t *a,
+    ...);
 
 #endif // _NSTR_H

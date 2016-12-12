@@ -131,6 +131,49 @@ main(
   assert(s12->type == NSTR_EMPTY_T);
   assert(s12->len == 0);
 
+  char *s13c0 = strdup("s");
+  assert(s13c0);
+  nstr_t *s13s0 =
+      nstr_new_buffer(
+          s13c0, s13c0, 1, 2);
+  assert(s13s0);
+
+  char *s13c1 = strdup("t");
+  assert(s13c0);
+  nstr_t *s13s1 =
+      nstr_new_buffer(
+          s13c1, s13c1, 1, 2);
+  assert(s13s1);
+
+  char *s13c2 = strdup("r");
+  assert(s13c2);
+  nstr_t *s13s2 =
+      nstr_new_buffer(
+          s13c2, s13c2, 1, 2);
+  assert(s13s2);
+
+  char *s13c3 = strdup("1");
+  assert(s13c3);
+  nstr_t *s13s3 =
+      nstr_new_buffer(
+          s13c3, s13c3, 1, 2);
+  assert(s13s3);
+
+  char *s13c4 = strdup("3");
+  assert(s13c4);
+  nstr_t *s13s4 =
+      nstr_new_buffer(
+          s13c4, s13c4, 1, 2);
+  assert(s13s4);
+
+  nstr_t *s13 =
+      nstr_concat(
+          s13s0, s13s1, s13s2, s13s3, s13s4, 0);
+
+  assert(s13);
+  assert(s13->type == NSTR_LIST_T);
+  assert(s13->len == 5);
+
 #define ck_str(n) \
     str = nstr_cstr(s ## n); \
     assert(str); \
@@ -164,6 +207,12 @@ main(
   assert(str);
   assert(strcmp(str, "") == 0);
 
+  ck_str(13);
+  assert(s13->type == NSTR_BUFFER_CSTR_T);
+  assert(s13->len == 5);
+  assert(s13->buf.str == s13->buf.start);
+  assert(s13->buf.len == s13->len + 1);
+
   nstr_unref(s1);
   nstr_unref(s2);
   nstr_unref(s3);
@@ -176,7 +225,7 @@ main(
   nstr_unref(s10);
   nstr_unref(s11);
   nstr_unref(s12);
+  nstr_unref(s13);
 
   return ret;
-
 }
