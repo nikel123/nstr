@@ -27,7 +27,7 @@ ntest: tests/ntest
 	LD_LIBRARY_PATH=. ./tests/ntest
 
 valgrind: tests/test
-	LD_LIBRARY_PATH=. valgrind ./tests/test
+	LD_LIBRARY_PATH=. valgrind --leak-check=full ./tests/test
 
 gdb: tests/test
 	LD_LIBRARY_PATH=. gdb ./tests/test

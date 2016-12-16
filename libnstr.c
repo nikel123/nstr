@@ -7,7 +7,8 @@ enum {
 
 struct nstr_list_iterator_t {
   size_t i;
-  void **lst;
+  void   **lst;
+  nstr_t *nstr;
 };
 typedef struct nstr_list_iterator_t nstr_list_iterator_t;
 
@@ -18,10 +19,10 @@ nstr_list_iterator_init(
 
   assert(nstr);
   assert(nstr->type == NSTR_LIST_T);
-  assert(nstr->len != 0);
 
-  iterator->i   = 0;
-  iterator->lst = nstr->lst;
+  iterator->i    = 0;
+  iterator->lst  = nstr->lst;
+  iterator->nstr = nstr;
 }
 
 static void **
@@ -35,8 +36,11 @@ nstr_list_iterator_next(
 
   assert(iterator->lst != 0);
 
-  size_t i = iterator->i;
+  size_t i    = iterator->i;
   nstr_t *ret = iterator->lst[i];
+
+  if ( nstr_unlikely(ret == 0) )
+    goto end;
 
   if ( i < nstr_list_order ) {
     ++(iterator->i);
@@ -45,7 +49,54 @@ nstr_list_iterator_next(
     iterator->i   = 0;
   }
 
+end:
   return ret;
+}
+
+static int
+nstr_list_iterator_append(
+    nstr_list_iterator_t *iterator,
+    nstr_t               *nstr) {
+
+  int ret;
+
+  assert(nstr);
+  assert(iterator);
+  assert(iterator->lst);
+  assert(iterator->i <= nstr_list_order);
+  assert(iterator->nstr->type == NSTR_LIST_T);
+  assert(iterator->nstr->refs == 1);
+
+  // check if there will be integer overflow
+  if ( nstr_unlikely(
+         (SIZE_MAX - iterator->nstr->len) <
+           nstr->len) )
+    goto err;
+
+
+  if ( iterator->i >= nstr_list_order ) {
+    void **next = nstr_list_new_lst();
+
+    if ( nstr_unlikely(next == 0) )
+      goto err;
+
+    iterator->lst[iterator->i] = next;
+    iterator->lst = next;
+    iterator->i = 0;
+  }
+
+  iterator->nstr->len += nstr->len;
+  iterator->lst[iterator->i] = nstr;
+  ++(iterator->i);
+
+  ret = 0;
+end:
+  return ret;
+
+err:
+  ret = 1;
+  goto end;
+
 }
 
 static void
@@ -68,7 +119,6 @@ nstr_list_copy_to_buf(
   // skip offset
 
   while(1) {
-
     cur = nstr_list_iterator_next(&itr);
 
     // it should not happen, what we
@@ -97,7 +147,6 @@ nstr_list_copy_to_buf(
   target += rest_len;
 
   while(1) {
-
     cur = nstr_list_iterator_next(&itr);
 
     // it should not run out of substrings
@@ -117,7 +166,6 @@ nstr_list_copy_to_buf(
     len -= rest_len;
     if ( len == 0 ) goto end;
     target += rest_len;
-
   }
 
 end:
@@ -465,6 +513,136 @@ nstr_cstr(
   return ret;
 }
 
+static int
+nstr_list_merge(
+    nstr_list_iterator_t *itr,
+    nstr_t *nstr) {
+
+  int ret;
+
+  assert(nstr);
+  assert(nstr->type == NSTR_LIST_T);
+  assert(nstr->refs == 1);
+
+  void **lst = nstr->lst;
+  void **next;
+  size_t i;
+
+  while(lst != 0) {
+    for(i = 0; i < nstr_list_order; ++i) {
+      if ( lst[i] == 0 ) {
+        free(lst);
+        goto loopexit;
+      }
+
+      if ( nstr_unlikely(
+             nstr_list_iterator_append(itr, lst[i])) )
+        goto err;
+    }
+
+    next = lst[i];
+    free(lst);
+    lst = next;
+  }
+
+loopexit:
+  ret = 0;
+
+end:
+  free(nstr);
+  return ret;
+
+err:
+  while(lst != 0) {
+    while(i < nstr_list_order) {
+      nstr_unref(lst[i]);
+      ++i;
+    }
+
+    next = lst[i];
+    free(lst);
+    lst = next;
+  }
+  ret = 1;
+  goto end;
+
+}
+
+static int
+nstr_buf_merge(
+    nstr_t *a,
+    nstr_t *b) {
+
+  int ret;
+
+  assert(a);
+  assert(b);
+
+  assert(a->refs == 1);
+  assert(
+      a->type == NSTR_BUFFER_T ||
+      a->type == NSTR_BUFFER_CSTR_T);
+
+  assert(b->len != 0);
+
+  size_t restlen = a->buf.len - a->len;
+
+  if ( restlen < b->len ) {
+    ret = 1;
+    goto end;
+  }
+
+  size_t offset = a->buf.str - a->buf.start;
+  if ( (restlen - offset) < b->len ) {
+    memmove(
+        a->buf.start,
+        a->buf.str,
+        a->len);
+    a->buf.str = a->buf.start;
+  }
+
+  nstr_copy_to_buf(
+      &(a->buf.str[a->len]),
+      b,
+      0,
+      b->len);
+
+  if ( a->type == NSTR_BUFFER_CSTR_T )
+    a->type = NSTR_BUFFER_T;
+
+  a->len += b->len;
+
+  nstr_unref(b);
+
+  ret = 0;
+end:
+  return ret;
+
+}
+
+static nstr_t *
+nstr_list_new() {
+
+  nstr_t *ret = malloc(sizeof(*ret));
+  if ( nstr_likely(ret != 0) ) {
+    void **lst = nstr_list_new_lst();
+    if ( nstr_unlikely(lst == 0) )
+      goto err;
+    ret->lst = lst;
+  }
+  ret->type = NSTR_LIST_T;
+  ret->len  = 0;
+  ret->refs = 1;
+
+end:
+  return ret;
+
+err:
+  free(ret);
+  ret = 0;
+  goto end;
+}
+
 nstr_t *
 nstr_concat(
     nstr_t *instr,
@@ -474,9 +652,9 @@ nstr_concat(
   va_start(ap, instr);
 
   nstr_t *ret;
-  void **lst;
-  void **next;
-  size_t i;
+  nstr_t *nnstr = 0;
+
+  nstr_list_iterator_t itr;
 
   // skip empty strings at the begining
   while(1) {
@@ -488,55 +666,102 @@ nstr_concat(
     instr = va_arg(ap, nstr_t *);
   }
 
+  // compact first element if possable
+  if ( instr->refs == 1 ) {
+    switch(instr->type) {
+      case NSTR_BUFFER_T:
+      case NSTR_BUFFER_CSTR_T:
+        while(1) {
+          // peek next argument
+          nnstr = va_arg(ap, nstr_t *);
+
+          // instr is now last string, so return it
+          if ( nnstr == 0 ) {
+            ret = instr;
+            goto end;
+          }
+
+          // skip empty
+          if ( nnstr->len == 0 ) {
+            nstr_unref(nnstr);
+            continue;
+          }
+
+          if ( nstr_buf_merge(instr, nnstr) )
+            break;
+        }
+        break;
+
+      case NSTR_LIST_T:
+        ret = instr;
+        nstr_list_iterator_init(&itr, ret);
+        while(nstr_list_iterator_next(&itr) != 0);
+        instr = va_arg(ap, nstr_t *);
+        goto append;
+
+      default:
+        ;
+    }
+  }
+
   // create new list
-  ret = malloc(sizeof(*ret));
-  if ( nstr_unlikely(ret == 0) )
-    goto err_unref_args;
+  ret = nstr_list_new();
+  nstr_list_iterator_init(&itr, ret);
 
-  lst = nstr_list_new_lst();
-  if ( nstr_unlikely(lst == 0) )
-    goto err_new_lst;
+  // take care of peeked argument
+  if ( nnstr != 0 ) {
+    if ( nstr_unlikely(
+           nstr_list_iterator_append(
+             &itr,
+             instr)) ) {
+     nstr_unref(nnstr);
+     goto err_append;
+   }
 
-  ret->type = NSTR_LIST_T;
-  ret->len  = 0;
-  ret->refs = 1;
-  ret->lst  = lst;
-  i = 0;
+   instr = nnstr;
+  }
 
+append:
   // append to the list
   while(instr !=0) {
+
     // skip empty strings
     if ( nstr_unlikely(instr->len == 0) ) {
       nstr_unref(instr);
       continue;
     }
 
-    // extend list if needed
-    if ( nstr_unlikely(i >= nstr_list_order) ) {
-      next = nstr_list_new_lst();
-      if ( nstr_unlikely(next == 0) )
-        goto err_lst_alloc;
-      lst[i] = next;
-      lst = next;
-      i = 0;
+    // check if we can optimize string for cheap
+    if ( instr->refs == 1 ) {
+      switch(instr->type) {
+        case NSTR_LIST_T:
+          if ( nstr_unlikely(
+                 nstr_list_merge(&itr, instr)) )
+            goto err_append;
+          instr = va_arg(ap, nstr_t *);
+          continue;
+
+        default:
+          ;
+      }
     }
 
-    ret->len += instr->len;
-    lst[i]   = instr;
-    instr    = va_arg(ap, nstr_t *);
-    ++i;
+    if ( nstr_unlikely(
+           nstr_list_iterator_append(
+             &itr,
+             instr)) )
+      goto err_append;
+
+    instr = va_arg(ap, nstr_t *);
   }
 
 end:
   va_end(ap);
   return ret;
 
-err_lst_alloc:
+err_append:
   nstr_unref(ret);
   goto err_unref_args;
-
-err_new_lst:
-  free(ret);
 
 err_unref_args:
   // clean up args in error case
@@ -566,26 +791,22 @@ nstr_list_free(
   assert(lst != 0);
 
   while(lst != 0) {
-
     for(i=0; i < nstr_list_order; ++i) {
-
       cur = lst[i];
-
       if ( cur != 0 ) {
         nstr_unref(cur);
       } else {
         free(lst);
         goto end;
       }
-
     }
 
     next = lst[i];
     free(lst);
     lst = next;
-
   }
 
 end:
   return;
+
 }

@@ -5,3 +5,4 @@
 *.swp
 config.mk
 tests/test
+vgcore.*

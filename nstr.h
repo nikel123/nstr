@@ -82,7 +82,7 @@ nstr_unref(
 
       case NSTR_LIST_T:
         nstr_list_free(nstr);
-        break;
+        goto nstr_free;
 
 	  case NSTR_SUB_T:
 	    nstr_unref(nstr->sub.ref);
