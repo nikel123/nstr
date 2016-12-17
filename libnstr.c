@@ -1,8 +1,12 @@
 #include <nstr.h>
 #include <stdarg.h>
 
+#define if_unlikely(cond) if ( nstr_unlikely(cond) )
+#define ldie_if(label, cond) if_unlikely(cond) goto label
+#define die_if(cond) ldie_if(err, cond)
+
 enum {
-  nstr_list_order = 1 // should be odd
+  nstr_list_order = 7 // should be odd
 };
 
 struct nstr_list_iterator_t {
@@ -39,7 +43,7 @@ nstr_list_iterator_next(
   size_t i    = iterator->i;
   nstr_t *ret = iterator->lst[i];
 
-  if ( nstr_unlikely(ret == 0) )
+  if_unlikely(ret == 0)
     goto end;
 
   if ( i < nstr_list_order ) {
@@ -68,17 +72,12 @@ nstr_list_iterator_append(
   assert(iterator->nstr->refs == 1);
 
   // check if there will be integer overflow
-  if ( nstr_unlikely(
-         (SIZE_MAX - iterator->nstr->len) <
-           nstr->len) )
-    goto err;
-
+  die_if((SIZE_MAX - iterator->nstr->len) < nstr->len);
 
   if ( iterator->i >= nstr_list_order ) {
     void **next = nstr_list_new_lst();
 
-    if ( nstr_unlikely(next == 0) )
-      goto err;
+    die_if(next == 0);
 
     iterator->lst[iterator->i] = next;
     iterator->lst = next;
@@ -229,14 +228,12 @@ nstr_sub_compact(
   assert(nstr->sub.ref->type != NSTR_EMPTY_T);
 
   // check for int overflow
-  if ( nstr_unlikely(nstr->len >= SIZE_MAX) )
-    goto err;
+  die_if(nstr->len >= SIZE_MAX);
 
   // alloc buffer for the compacted nstr
   const size_t buflen = nstr->len + 1;
   buf = malloc(buflen);
-  if ( nstr_likely(buf == 0) )
-    goto err;
+  die_if(buf == 0);
 
   // copy content to the new buffer
   nstr_copy_to_buf(
@@ -278,8 +275,7 @@ nstr_list_compact(
   const size_t buflen = nstr->len + 1;
   char *buf = malloc(buflen);
 
-  if (nstr_unlikely(buf == 0))
-    goto err;
+  die_if(buf == 0);
 
   char *bufi = buf;
 
@@ -292,7 +288,7 @@ nstr_list_compact(
     for(i = 0; i < nstr_list_order; ++i) {
       subnstr = lst[i];
 
-      if ( nstr_unlikely(subnstr == 0) ) {
+      if_unlikely(subnstr == 0) {
         free(lst);
         goto end_loop;
       }
@@ -453,7 +449,7 @@ nstr_sub_cstr(
       }
 
     default:
-      if ( nstr_unlikely(nstr_sub_compact(nstr)) ) {
+      if_unlikely(nstr_sub_compact(nstr)) {
 
         ret = 0;
 
@@ -496,7 +492,7 @@ nstr_cstr(
       break;
 
     case NSTR_LIST_T:
-      if ( nstr_unlikely(nstr_list_compact(nstr)) ) {
+      if_unlikely(nstr_list_compact(nstr)) {
         ret = 0;
       } else {
         assert(nstr->type == NSTR_BUFFER_CSTR_T);
@@ -535,9 +531,7 @@ nstr_list_merge(
         goto loopexit;
       }
 
-      if ( nstr_unlikely(
-             nstr_list_iterator_append(itr, lst[i])) )
-        goto err;
+      die_if(nstr_list_iterator_append(itr, lst[i]));
     }
 
     next = lst[i];
@@ -626,8 +620,7 @@ nstr_list_new() {
   nstr_t *ret = malloc(sizeof(*ret));
   if ( nstr_likely(ret != 0) ) {
     void **lst = nstr_list_new_lst();
-    if ( nstr_unlikely(lst == 0) )
-      goto err;
+    die_if(lst == 0);
     ret->lst = lst;
   }
   ret->type = NSTR_LIST_T;
@@ -658,8 +651,7 @@ nstr_concat(
 
   // skip empty strings at the begining
   while(1) {
-    if ( instr == 0 )
-      goto err_unref_args;
+    ldie_if(err_unref_args, (instr == 0));
     if ( instr->len != 0 )
       break;
     nstr_unref(instr);
@@ -693,6 +685,8 @@ nstr_concat(
         break;
 
       case NSTR_LIST_T:
+        // if first element is list
+        // use it as return string
         ret = instr;
         nstr_list_iterator_init(&itr, ret);
         while(nstr_list_iterator_next(&itr) != 0);
@@ -710,13 +704,10 @@ nstr_concat(
 
   // take care of peeked argument
   if ( nnstr != 0 ) {
-    if ( nstr_unlikely(
-           nstr_list_iterator_append(
-             &itr,
-             instr)) ) {
-     nstr_unref(nnstr);
-     goto err_append;
-   }
+    if_unlikely(nstr_list_iterator_append(&itr, instr)) {
+      nstr_unref(nnstr);
+      goto err_append;
+    }
 
    instr = nnstr;
   }
@@ -724,9 +715,9 @@ nstr_concat(
 append:
   // append to the list
   while(instr !=0) {
-
+continue_loop:
     // skip empty strings
-    if ( nstr_unlikely(instr->len == 0) ) {
+    if_unlikely(instr->len == 0) {
       nstr_unref(instr);
       continue;
     }
@@ -734,10 +725,45 @@ append:
     // check if we can optimize string for cheap
     if ( instr->refs == 1 ) {
       switch(instr->type) {
+
+        case NSTR_BUFFER_T:
+        case NSTR_BUFFER_CSTR_T:
+          // compact buffers if possable
+          while(1) {
+            nnstr = va_arg(ap, nstr_t *);
+
+            // instr was last element
+            if_unlikely(nnstr == 0) {
+              die_if(nstr_list_iterator_append(&itr,instr));
+              goto end;
+            }
+
+            // skip empty
+            if ( nnstr->len == 0 ) {
+              nstr_unref(nnstr);
+              continue;
+            }
+
+            if ( nstr_buf_merge(instr, nnstr) ) {
+              // could not merge
+              if_unlikely(
+                  nstr_list_iterator_append(
+                    &itr,
+                    instr)) {
+                nstr_unref(nnstr);
+                goto err_append;
+              }
+
+              instr = nnstr;
+              goto continue_loop;
+
+            }
+
+          }
+          break;
+
         case NSTR_LIST_T:
-          if ( nstr_unlikely(
-                 nstr_list_merge(&itr, instr)) )
-            goto err_append;
+          ldie_if(err_append, nstr_list_merge(&itr, instr));
           instr = va_arg(ap, nstr_t *);
           continue;
 
@@ -746,11 +772,7 @@ append:
       }
     }
 
-    if ( nstr_unlikely(
-           nstr_list_iterator_append(
-             &itr,
-             instr)) )
-      goto err_append;
+    ldie_if(err_append, nstr_list_iterator_append(&itr, instr));
 
     instr = va_arg(ap, nstr_t *);
   }
@@ -770,6 +792,7 @@ err_unref_args:
     instr = va_arg(ap, nstr_t *);
   }
 
+err:
   ret = 0;
   goto end;
 }
@@ -808,5 +831,4 @@ nstr_list_free(
 
 end:
   return;
-
 }

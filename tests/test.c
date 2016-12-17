@@ -185,6 +185,10 @@ main(
   assert(s13->type == NSTR_LIST_T);
   assert(s13->len == 5);
 
+  assert(((nstr_t *)(s13->lst[1]))->len == 2);
+  assert(((nstr_t *)(s13->lst[1]))->type == NSTR_BUFFER_T);
+  assert(memcmp(((nstr_t *)(s13->lst[1]))->buf.str, "13", 2) == 0);
+
   char *s14c0 = strdup("s");
   assert(s14c0);
   nstr_t *s14s0 =
