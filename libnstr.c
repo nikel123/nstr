@@ -191,7 +191,7 @@ nstr_copy_to_buf(
     case NSTR_CSTR_T:
     case NSTR_BUFFER_T:
     case NSTR_BUFFER_CSTR_T:
-      memcpy(target, nstr->cstr.str + offset, len);
+      memcpy(target, nstr->cstr + offset, len);
       break;
 
     case NSTR_SUB_T:
@@ -362,12 +362,12 @@ nstr_const_cstr(
 
   assert(nstr->refs);
   assert(nstr->len);
-  assert(nstr->cstr.str);
+  assert(nstr->cstr);
 
   char *ret = malloc(nstr->len + 1);
 
   if ( nstr_likely(ret != 0) ) {
-    memcpy(ret, nstr->cstr.str, nstr->len);
+    memcpy(ret, nstr->cstr, nstr->len);
     ret[nstr->len] = 0;
 
     nstr->type    = NSTR_BUFFER_CSTR_T;
@@ -444,7 +444,7 @@ nstr_sub_cstr(
     case NSTR_CSTR_T:
     case NSTR_BUFFER_CSTR_T:
       if ( (offset + nstr->len) == sub->len ) {
-        ret = sub->cstr.str + offset;
+        ret = sub->cstr + offset;
         break;
       }
 
@@ -456,7 +456,7 @@ nstr_sub_cstr(
       } else {
 
         assert(nstr->type == NSTR_BUFFER_CSTR_T);
-        ret = nstr->cstr.str;
+        ret = nstr->cstr;
 
       }
   }
@@ -476,7 +476,7 @@ nstr_cstr(
 
     case NSTR_CSTR_T:
     case NSTR_BUFFER_CSTR_T:
-      ret = nstr->cstr.str;
+      ret = nstr->cstr;
       break;
 
     case NSTR_CONST_T:
@@ -496,7 +496,7 @@ nstr_cstr(
         ret = 0;
       } else {
         assert(nstr->type == NSTR_BUFFER_CSTR_T);
-        ret = nstr->cstr.str;
+        ret = nstr->buf.str;
       }
       break;
 
@@ -831,4 +831,57 @@ nstr_list_free(
 
 end:
   return;
+}
+
+nstr_t *
+nstr_new_sub(
+    nstr_t *ref,
+    size_t offset,
+    size_t len) {
+
+  nstr_t *ret;
+
+  assert(ref != 0);
+
+  // check for int overflow
+  die_if(
+      ((SIZE_MAX - offset) < len) ||
+      (ref->len < (offset + len)));
+
+  ret = malloc(sizeof(*ret));
+
+  if_unlikely(ret != 0) {
+
+    if ( ref->type == NSTR_EMPTY_T ) {
+
+      assert(offset == 0);
+      assert(len    == 0);
+
+      ret->type = NSTR_EMPTY_T;
+      ret->len  = 0;
+
+    } else {
+
+      assert(len != 0);
+
+      ret->type = NSTR_SUB_T;
+      ret->len  = len;
+
+      nstr_ref(ref);
+      ret->sub.ref    = ref;
+      ret->sub.offset = offset;
+
+    }
+
+    ret->refs = 1;
+
+  }
+
+end:
+  return ret;
+
+err:
+  ret = 0;
+  goto end;
+
 }

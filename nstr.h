@@ -39,19 +39,23 @@ struct nstr_t {
     } buf;
 
     struct {
-      const char *str;
-    } cstr;
-
-    struct {
       nstr_t *ref;
       size_t offset;
     } sub;
 
+    const char *cstr;
     void **lst;
 
   };
 };
 
+
+static void
+nstr_ref(
+    nstr_t *nstr)
+  __attribute__((unused));
+
+// indicate, what string is needed
 static void
 nstr_ref(
     nstr_t *nstr) {
@@ -61,11 +65,13 @@ nstr_ref(
 
 }
 
-// only for use in nstr_unref
+// only for use in nstr_unref() function
 void
 nstr_list_free(
     nstr_t *nstr);
 
+// indicated when string is not needed anymore
+// when nobody is don't need the string, it will be freed
 static void
 nstr_unref(
     nstr_t *nstr) {
@@ -102,14 +108,17 @@ nstr_unref(
   }
 }
 
+// optimize string if it will be used more often
 int
 nstr_compact(
     nstr_t *nstr);
 
+// get c string from the string
 const char *
 nstr_cstr(
     nstr_t *nstr);
 
+// create new empty string
 static nstr_t *
 nstr_new()
     __attribute__((unused));
@@ -129,6 +138,7 @@ nstr_new() {
 
 }
 
+// create string from constant c string of known length
 static nstr_t *
 nstr_new_cstr_n(
     const char *str,
@@ -143,13 +153,14 @@ nstr_new_cstr_n(
     ret->type     = NSTR_CSTR_T;
     ret->len      = len;
     ret->refs     = 1;
-    ret->cstr.str = str;
+    ret->cstr     = str;
   }
 
   return ret;
 
 }
 
+// create string from constant c string
 static nstr_t *
 nstr_new_cstr(
     const char *str)
@@ -184,7 +195,7 @@ nstr_new_const(
     ret->type     = NSTR_CONST_T;
     ret->len      = len;
     ret->refs     = 1;
-    ret->cstr.str = str;
+    ret->cstr     = str;
   }
 
   return ret;
@@ -238,67 +249,14 @@ nstr_new_buffer(
 
 }
 
-static nstr_t *
+// create reference to a substring of the original string
+nstr_t *
 nstr_new_sub(
     nstr_t *ref,
     size_t offset,
-    size_t len)
-  __attribute__((unused));
+    size_t len);
 
-static nstr_t *
-nstr_new_sub(
-    nstr_t *ref,
-    size_t offset,
-    size_t len) {
-
-  nstr_t *ret;
-
-  assert(ref != 0);
-
-  // check for int overflow
-  if ( nstr_unlikely(
-      ((SIZE_MAX - offset) < len) ||
-      (ref->len < (offset + len)) )) {
-
-    ret = 0;
-    goto end;
-
-  }
-
-  ret = malloc(sizeof(*ret));
-
-  if ( nstr_likely(ret != 0) ) {
-
-    if ( ref->type == NSTR_EMPTY_T ) {
-
-      assert(offset == 0);
-      assert(len    == 0);
-
-      ret->type = NSTR_EMPTY_T;
-      ret->len  = 0;
-
-    } else {
-
-      assert(len != 0);
-
-      ret->type = NSTR_SUB_T;
-      ret->len  = len;
-
-      nstr_ref(ref);
-      ret->sub.ref    = ref;
-      ret->sub.offset = offset;
-
-    }
-
-    ret->refs = 1;
-
-  }
-
-end:
-  return ret;
-
-}
-
+// copy content of the string to a buffer
 void
 nstr_copy_to_buf(
     char   *target,

@@ -16,7 +16,7 @@ main(
   assert(s1);
   assert(s1->type == NSTR_CSTR_T);
   assert(s1->len == 4);
-  assert(strcmp(s1->cstr.str, "str1") == 0);
+  assert(strcmp(s1->cstr, "str1") == 0);
 
   nstr_t *s2 = nstr_new_const("str2", 4);
   assert(s2);
