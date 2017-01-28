@@ -70,6 +70,11 @@ void
 nstr_list_free(
     nstr_t *nstr);
 
+static void
+nstr_unref(
+    nstr_t *nstr)
+  __attribute__((unused));
+
 // indicated when string is not needed anymore
 // when nobody is don't need the string, it will be freed
 static void

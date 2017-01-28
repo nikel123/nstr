@@ -3,7 +3,10 @@ AUTHOR := Andrej Gelenberg <andrej.gelenberg@udo.edu>
 VER_MAJOR := 0
 VER_MINOR := 1
 
-all: libnstr.so
+all: libnstr.so libnparse.so
+
+libnparse.so: libnparse.o
+libnparse.so: LIBS=-lnstr
 
 libnstr.so: libnstr.o
 libnstr.so: LIBS=
@@ -11,13 +14,13 @@ libnstr.so: LIBS=
 tests/test: libnstr.so.$(VER_MAJOR)
 tests/test: tests/test.o
 tests/test: LDFLAGS=-L.
-tests/test: LIBS=-lnstr
+tests/test: LIBS=-lnstr -lnparse
 
 CFLAGS += -I. -Werror
 
 CLEAN += tests/test
 
-tests/test bench libnstr.so: Makefile
+tests/test bench libnstr.so libnparse.so: Makefile
 
 .PHONY: test do_bench
 test: tests/test
@@ -36,5 +39,5 @@ PERF ?= perf
 perf: tests/test
 	LD_LIBRARY_PATH=. $(PERF) record ./tests/test
 
-$(eval $(call install_so,libnstr.so))
-install: $(DESTDIR)/usr/include/nstr.h
+$(eval $(call install_so,libnstr.so libnparse.so))
+install: $(DESTDIR)/usr/include/nstr.h $(DESTDIR)/usr/include/parse.h
