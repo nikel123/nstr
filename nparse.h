@@ -3,22 +3,29 @@
 #define _NPARSE_H
 
 struct nparser_t {
-  nstr_iterator_t *itr;
-  nstr_t          *buffer;
-  size_t           length;
-  int              fd;
+  size_t      i;
+  size_t      end;
+  const char *buffer;
+  int         fd;
+  nstr_t     *nstr;
+  int         is_mmap;
 };
 typedef struct nparser_t nparser_t;
 
 enum nparse_status_t {
-  NPARSER_OK      = 0,
-  NPARSER_UNKNOWN = 1,
-  NPARSER_NOMEM   = 2,
+  NPARSER_OK         = 0,
+  NPARSER_UNKNOWN    = 1,
+  NPARSER_NOMEM      = 2,
+  NPARSER_OPEN_FAIL  = 3,
+  NPARSER_MMAP_FAIL  = 4,
+  NPARSER_FSTAT_FAIL = 5,
+  NPARSER_TODO       = 6,
+  NPARSER_EMPTY      = 7,
 };
 typedef enum nparse_status_t nparse_status_t;
 
 const char *
-nparser_status_str(
+nparse_status_str(
     nparse_status_t status);
 
 nparser_t *
